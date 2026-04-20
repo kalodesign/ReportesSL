@@ -98,14 +98,24 @@ async def recibir_descripcion_voz(
 
     try:
         from groq import Groq
+        import subprocess
+
+        # Convertir ogg/opus → mp3 para compatibilidad con Groq
+        mp3_path = tmp_path.replace(".ogg", ".mp3")
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", mp3_path],
+            check=True,
+            capture_output=True,
+        )
 
         client = Groq(api_key=GROQ_API_KEY)
-        with open(tmp_path, "rb") as audio_file:
+        with open(mp3_path, "rb") as audio_file:
             transcripcion = client.audio.transcriptions.create(
-                file=("audio.ogg", audio_file, "audio/ogg"),
+                file=("audio.mp3", audio_file, "audio/mpeg"),
                 model="whisper-large-v3",
                 language="es",
             )
+        os.unlink(mp3_path)
         texto = transcripcion.text.strip()
         context.user_data["descripcion"] = texto
         await msg.edit_text(
