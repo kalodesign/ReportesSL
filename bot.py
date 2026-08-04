@@ -244,5 +244,56 @@ def main() -> None:
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
+async def run():
+    loop = asyncio.get_running_loop()
+
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start),
+            CommandHandler("nuevo", start),
+        ],
+        states={
+            NOMBRE_CLIENTE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre)
+            ],
+            TELEFONO_CLIENTE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_telefono)
+            ],
+            DIRECCION_CLIENTE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_direccion)
+            ],
+            DESCRIPCION_TRABAJO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_descripcion_texto),
+                MessageHandler(filters.VOICE, recibir_descripcion_voz),
+            ],
+            FOTOS: [
+                MessageHandler(filters.PHOTO, recibir_foto),
+                CommandHandler("listo", generar_reporte),
+            ],
+        },
+        fallbacks=[CommandHandler("cancelar", cancelar)],
+        allow_reentry=True,
+    )
+
+    app.add_handler(conv)
+    logger.info("Bot iniciado ✅")
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
+
+if __name__ == "__main__":
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     main()
