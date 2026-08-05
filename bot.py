@@ -2,6 +2,8 @@ import os
 import logging
 import tempfile
 import datetime
+import asyncio
+
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
