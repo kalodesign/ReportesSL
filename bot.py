@@ -1,19 +1,20 @@
+Python
 import os
 import logging
 import tempfile
 import datetime
-import asyncio
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ConversationHandler,
-    filters,
     ContextTypes,
+    filters,
 )
 from pdf_generator import generar_pdf
 
+# Configuración de logs
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -132,7 +133,8 @@ async def recibir_descripcion_voz(
         )
         return DESCRIPCION_TRABAJO
     finally:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
     return FOTOS
 
@@ -189,7 +191,8 @@ async def generar_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Limpieza
     os.unlink(pdf_path)
     for p in fotos_paths:
-        os.unlink(p)
+        if os.path.exists(p):
+            os.unlink(p)
 
     context.user_data.clear()
     await update.message.reply_text(
@@ -208,10 +211,16 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def main() -> None:
-    app = Application.builder().token(BOT_TOKEN).build()
+def main():
+    TOKEN = os.environ.get("BOT_TOKEN", BOT_TOKEN)
+    PORT = int(os.environ.get("PORT", 8080))
+    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
-    conv = ConversationHandler(
+    # Construir la aplicación del bot
+    application = Application.builder().token(TOKEN).build()
+
+    # Configurar la conversación
+    conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
             CommandHandler("nuevo", start),
@@ -227,7 +236,9 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_direccion)
             ],
             DESCRIPCION_TRABAJO: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_descripcion_texto),
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, recibir_descripcion_texto
+                ),
                 MessageHandler(filters.VOICE, recibir_descripcion_voz),
             ],
             FOTOS: [
@@ -239,60 +250,19 @@ def main() -> None:
         allow_reentry=True,
     )
 
-    app.add_handler(conv)
-    logger.info("Bot iniciado ✅")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.add_handler(conv_handler)
 
-
-async def run():
-    loop = asyncio.get_running_loop()
-
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    conv = ConversationHandler(
-        entry_points=[
-            CommandHandler("start", start),
-            CommandHandler("nuevo", start),
-        ],
-        states={
-            NOMBRE_CLIENTE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre)
-            ],
-            TELEFONO_CLIENTE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_telefono)
-            ],
-            DIRECCION_CLIENTE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_direccion)
-            ],
-            DESCRIPCION_TRABAJO: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_descripcion_texto),
-                MessageHandler(filters.VOICE, recibir_descripcion_voz),
-            ],
-            FOTOS: [
-                MessageHandler(filters.PHOTO, recibir_foto),
-                CommandHandler("listo", generar_reporte),
-            ],
-        },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
-        allow_reentry=True,
-    )
-
-    app.add_handler(conv)
-    logger.info("Bot iniciado ✅")
-
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-
-    try:
-        await asyncio.Event().wait()
-    finally:
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
-
-if __name__ == "__main__":
-    asyncio.run(run())
+    # Iniciar en modo Webhook para Render
+    if RENDER_URL:
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TOKEN,
+            webhook_url=f"{RENDER_URL}/{TOKEN}",
+        )
+    else:
+        # Fallback por si lo ejecutas de manera local
+        application.run_polling()
 
 
 if __name__ == "__main__":
