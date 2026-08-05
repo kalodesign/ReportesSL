@@ -217,6 +217,10 @@ def main():
     PORT = int(os.environ.get("PORT", 8080))
     RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
+    # Crear y establecer explícitamente el event loop para Python 3.14+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     # Construir la aplicación del bot
     application = Application.builder().token(TOKEN).build()
 
@@ -262,7 +266,7 @@ def main():
             webhook_url=f"{RENDER_URL}/{TOKEN}",
         )
     else:
-        # Fallback por si lo ejecutas de manera local
+        # Fallback local
         application.run_polling()
 
 
