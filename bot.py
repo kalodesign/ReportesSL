@@ -1,4 +1,3 @@
-Python
 import os
 import logging
 import tempfile
